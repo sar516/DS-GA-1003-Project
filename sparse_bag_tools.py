@@ -18,68 +18,67 @@ def bag_of_games(data_set):
             
     return user_bag
 
+def preprocessing(bag):
+    user_count = {user : len(items) for user, items in bag.items()}
+    k ={}
+    for key, value in user_count.items():
+        if value > 1:
+            k[key] = value
+    exp_bag = {user: bag[user] for user in k.keys()}
+    return exp_bag
+
 
 def leave_n_in(bag, n=1, p = .25):
     copy_bag = copy.deepcopy(bag)
-    user_ids = list(copy_bag.keys())
     
-    N = 0
-    targets = []
-    for user in bag.keys():
-        game_list = bag[user] 
-        j = len(game_list)
-        N += j
-        if j > n:
-            targets.append(user)
-            
-                
+    N = sum([len(lists) for lists in bag.values()])
+    item_bag = sparse_bag_transpose(bag)
+    item_count = {item : len(users) for item , users in item_bag.items()}
     k = int(p*N)
     popped = []
     removed = {}
     i = 0
-    h = len(targets)
+    list_of_user = list(copy_bag.keys())
+    black_list = []
+    
     while i != k:
-        rand_1 = int(h*(random.random()))
-        user = targets[rand_1]
-        gamelist = copy_bag[user]
-        j = len(gamelist) 
+        h = len(list_of_user)
+        will_remove_item = False
+        rand = int(h*(random.random()))
+        user = list_of_user[rand]
+        
+            
+        items = copy_bag[user]
+        j = len(items) 
+        
         if j <= n:
-            pass
+            list_of_user.remove(user)
         else:
-            if user not in popped:
-                popped.append(user)
-            rand_2 = int(j*random.random())
-            games  = list(gamelist.keys())
-            selected = games[rand_2]
-            removed[(user, selected)] = gamelist.pop(selected)   
-            i += 1
+            item_list = list(items.keys())
+            rand_2 = int(j*(random.random()))
+            item = item_list[rand_2]
+            if item_count[item] > 1:
+                removed[(user, item)] = items.pop(item)
+                j -= 1
+                item_count[item] -= 1
+                if j == n:
+                    list_of_user.remove(user)
+                
+                i += 1
+            
     else:
-        query_bag = {}
-        for user in popped:
-            query_bag[user] = copy_bag.pop(user)
-    return copy_bag, removed, query_bag
-    
+        return copy_bag, removed
 
-def mean_norm(bag, n = 1, p = .25):
-    train_bag, test_points, query_bag = leave_n_in(bag, n, p)
-    mean = 0
-    N = 0
-    for user in train_bag.keys():
-        games_list = train_bag[user]
-        mean += sum(games_list.values())
-        N += len(games_list)
-    else:
-        mean = mean/N
+def norm(bag, func = None):
+    copy_bag = copy.deepcopy(bag)
+    if not func:
+        func = lambda x : np.log10(1 + x*60)
         
-    for user in train_bag.keys():
-        games_list = train_bag[user]
-        for game in games_list.keys():
-            games_list[game] = games_list[game]/mean
-    
-    for pair in test_points.keys():
-        test_points[pair] = test_points[pair]/mean
+    for user in copy_bag.keys():
+        games_list = copy_bag[user]
+        copy_bag[user] = {k: func(v) for k, v in games_list.items()}
         
-    return train_bag, test_points, query_bag 
+    return copy_bag
     
 
 class Baseline():
@@ -114,13 +113,11 @@ class Baseline():
         return self
     
     
-    def predict(self, test_points, query_bag):
+    def predict(self, test_points):
         predictions = {}
-        query_baselines = {user : self.get_bu(users_list) 
-                           for user, users_list in query_bag.items()}
         for pair in test_points:
             user, item = pair
-            b_u = query_baselines[user]
+            b_u = self.user_baselines[user]
             b_i = self.item_baselines.get(item, 0)
             predictions[pair] = self.mu + b_u + b_i
                 
@@ -169,12 +166,12 @@ def knn_dict(neighbors, query, k = 2):
     for i in range(len(keys)):
         
         key = keys[i]
-        dists[i] = dict_dist(neighbors[key], query)
+        dists[i] = cos_sim(neighbors[key], query)
         
     for j in range(k):
         
-        m = np.argmin(dists)
-        dists[m] = 10**10
+        m = np.argmax(dists)
+        dists[m] = -10**10
         selected = keys[m] 
         knn[selected] = neighbors[selected]
         
