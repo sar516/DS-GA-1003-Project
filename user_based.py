@@ -35,11 +35,13 @@ class user_based_CF():
             self.user_dict[user] = i
             i += 1
 
-    def knn1(self, test_pair, k=2):
-        user, item = test_pair
+    def knn1(self, query):
 
+        
+        
+        
         # find the valid neighbors
-        neighbors = {}
+        """neighbors = {ref_user : train_bag[ref_user] for}
         for ref_user in list(train_bag.keys()):
             for ref_item in list(train_bag[ref_user].keys()):
                 if (ref_item == item) and (ref_user != user):
@@ -61,7 +63,12 @@ class user_based_CF():
             selected = valid_nb[m]
             knn[selected] = neighbors[selected]
 
-        return knn
+        return knn"""
+        
+        dists = [(key, self.get_sim(key, query)) 
+                 for key in self.train_bag.keys() if key != query]
+        dists.sort(key=lambda pair: pair[1], reverse=True)
+        self.neighborhood[query] = [pair[0] for pair in dists]
 
     # def knn2(self, query, k=2):
     #     keys = list(neighbors.keys())
@@ -83,23 +90,29 @@ class user_based_CF():
     #     return knn
 
     def fit(self):
-        print 'Fitting Start!!!\n'
+        print('Fitting Start!!!\n')
+        self.item_bag  = sparse_bag_transpose(train_bag)
         count = 0
         n = len(self.train_bag.keys())
         self.sim_mat = np.zeros((n, n))
         n = n**2
         for user1 in list(self.train_bag.keys()):
             for user2 in list(self.train_bag.keys()):
-                self.sim_mat[self.user_dict[user1], self.user_dict[user2]] = cos_sim(self.train_bag[user1],self.train_bag[user2])
+                self.sim_mat[self.user_dict[user1], self.user_dict[user2]] = cos_sim(self.train_bag[user1], self.train_bag[user2])
                 count += 1
                 if count in [n/10,n/5,n/3,n/2,int(n/1.67),int(n/1.43),int(n/1.25),int(n/1.11)]:
-                    print 'Fitting Progress:' + str(count*1.0/n) + '\n'
+                    print('Fitting Progress:' + str(count*1.0/n) + '\n')
 
         self.fitted = True
-        print 'Fitting Complete!!!\n'
-
+        self.neighborhood = {}
+        print('Fitting Complete!!!\n')
         return self
-
+    
+    
+    def get_sim(self, user1, user2):
+        return self.sim_mat[self.user_dict[user1], self.user_dict[user2]]
+    
+    
     def predict(self, test_points, k=2):
         predictions = {}
         for pair in test_points.keys():
@@ -108,50 +121,65 @@ class user_based_CF():
             pred = 0  # upper of the mean weighted average equation
             abs_sim = 0 # lower of the mean weighted average equation
 
-            knn = self.knn1(pair, k)  #the pair should be changed into correct item.
-            ref_users = list(knn.keys())
-            if ref_users == []:
-                predictions[pair] = 0
-                continue
-            for ref_user in ref_users:
-                ref_bag = self.train_bag[ref_user]
-                similarity = self.sim_mat[self.user_dict[ref_user], self.user_dict[user]]
-                mean_ref_rating = mean_rating(ref_bag)
-                pred = pred + similarity *(ref_bag[item] - mean_ref_rating)
-                abs_sim += np.abs(similarity)
+            if user not in self.neighborhood.keys():
+                if user not in self.train_bag.keys():
+                    knn = []
+                else:
+                    self.knn1(user)
+                    knn = (self.neighborhood[user])
+                    
+            else:
+                if user not in self.train_bag.keys():
+                    knn = []
+                else:
+                    knn = (self.neighborhood[user])
+              
+            
+            
+            overlap = list(set(knn) & set(list(self.item_bag[item].keys())))
+            if len(overlap) >= k:
+                N = overlap[:k]
+            else:
+                N = overlap
+                
+                
+            pred = sum([self.get_sim(user, u)*(self.item_bag[item][u]- mean_rating(self.train_bag[u])) 
+                        for u in N])
+            abs_sim = sum([abs(self.get_sim(user, u)) for u in N])
+            
             if abs_sim == 0:
-                predictions[pair] = 0
+                predictions[pair] = mean_rating(pred_bag)
                 continue
             predictions[pair] = mean_rating(pred_bag) + (pred/abs_sim)
 
         return predictions
 
 
+if __name__ == "__main__":
+    ub = user_based_CF(train_bag)
+    ub.fit()
 
-ub = user_based_CF(train_bag)
-ub.fit()
+    #path = "../data.dat"
+    # np.savetxt(os.path.abspath(path), ub.sim_mat)
+    #ub.sim_mat = np.loadtxt(os.path.abspath(path))
 
-#path = "../data.dat"
-# np.savetxt(os.path.abspath(path), ub.sim_mat)
-#ub.sim_mat = np.loadtxt(os.path.abspath(path))
-
-MAE = []
-RMSE = []
-for k in range(2,20):
-    pred = ub.predict(test_points, k)
-    mae, rmse = get_metrics(test_points, pred)
-    MAE.append(mae)
-    RMSE.append(rmse)
-    print 'k = ' + str(k) + ': MAE = ' + str(mae) + ' RMSE = ' + str(rmse)
-    print '\n'
+    MAE = []
+    RMSE = []
+    for k in range(2,20):
+        pred = ub.predict(test_points, k)
+        mae, rmse = get_metrics(test_points, pred)
+        MAE.append(mae)
+        RMSE.append(rmse)
+        print('k = ' + str(k) + ': MAE = ' + str(mae) + ' RMSE = ' + str(rmse))
+        print('\n')
 
 
-plt.plot(range(2,20), MAE)
-plt.xlabel('k')
-plt.ylabel('MAE')
-plt.show()
+    plt.plot(range(2,20), MAE)
+    plt.xlabel('k')
+    plt.ylabel('MAE')
+    plt.show()
 
-plt.plot(range(2,20), RMSE)
-plt.xlabel('k')
-plt.ylabel('RMSE')
-plt.show()
+    plt.plot(range(2,20), RMSE)
+    plt.xlabel('k')
+    plt.ylabel('RMSE')
+    plt.show()
