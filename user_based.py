@@ -154,6 +154,50 @@ class user_based_CF():
 
         return predictions
 
+    def predict2(self, test_points, k=2):
+        predictions = {}
+        for pair in test_points.keys():
+            user, item = pair
+            pred_bag = self.train_bag[user]  # extact the target user's data
+            pred = 0  # upper of the mean weighted average equation
+            abs_sim = 0  # lower of the mean weighted average equation
+
+            if user not in self.neighborhood.keys():
+                if user not in self.train_bag.keys():
+                    knn = []
+                else:
+                    self.knn1(user)
+                    knn = (self.neighborhood[user])
+
+            else:
+                if user not in self.train_bag.keys():
+                    knn = []
+                else:
+                    knn = (self.neighborhood[user])
+
+            overlap = list(set(knn))
+            if len(overlap) >= k:
+                N = overlap[:k]
+            else:
+                N = overlap
+
+            for u in N:
+                if u in self.item_bag[item]:
+                    pred += self.get_sim(user, u) * (self.item_bag[item][u] - mean_rating(self.train_bag[u]))
+                    abs_sim += abs(self.get_sim(user, u))
+                else:
+                    pred += self.get_sim(user, u) * (0 - mean_rating(self.train_bag[u]))
+                    abs_sim += abs(self.get_sim(user, u))
+            # pred = sum([self.get_sim(user, u) * (self.item_bag[item][u] - mean_rating(self.train_bag[u]))
+            #             for u in N])
+            # abs_sim = sum([abs(self.get_sim(user, u)) for u in N])
+
+            if abs_sim == 0:
+                predictions[pair] = mean_rating(pred_bag)
+                continue
+            predictions[pair] = mean_rating(pred_bag) + (pred / abs_sim)
+
+        return predictions
 
 if __name__ == "__main__":
     ub = user_based_CF(train_bag)
@@ -164,22 +208,34 @@ if __name__ == "__main__":
     #ub.sim_mat = np.loadtxt(os.path.abspath(path))
 
     MAE = []
+    MAE2 = []
     RMSE = []
+    RMSE2 = []
     for k in range(2,20):
         pred = ub.predict(test_points, k)
+        pred2 = ub.predict2(test_points, k)
         mae, rmse = get_metrics(test_points, pred)
+        mae2, rmse2 = get_metrics(test_points, pred2)
         MAE.append(mae)
+        MAE2.append(mae2)
         RMSE.append(rmse)
-        print('k = ' + str(k) + ': MAE = ' + str(mae) + ' RMSE = ' + str(rmse))
+        RMSE2.append(rmse2)
+        print('k = ' + str(k) + ': MAE = ' + str(mae) + ' MAE2 = ' + str(mae2) + ' RMSE = ' + str(rmse)) + 'RMSE2 = ' + str(rmse2)
         print('\n')
 
 
-    plt.plot(range(2,20), MAE)
-    plt.xlabel('k')
-    plt.ylabel('MAE')
+    plt.xlabel('K')
+    plt.ylabel('Error')
+    plt.title('MAE and RMSE for two methods')
+    plt.plot(range(2,20), MAE, 'r', label = "MAE for method 2")
+    plt.plot(range(2,20), MAE2, 'b', label = "MAE for method 1")
+    plt.plot(range(2,20), RMSE, 'g', label = "RMSE for method 2")
+    plt.plot(range(2,20), RMSE2, 'k', label = "RMSE for method 1")
+    plt.legend()
+    plt.savefig("user_twomethods.jpg")
     plt.show()
 
-    plt.plot(range(2,20), RMSE)
-    plt.xlabel('k')
-    plt.ylabel('RMSE')
-    plt.show()
+    # plt.plot(range(2,20), RMSE)
+    # plt.xlabel('k')
+    # plt.ylabel('RMSE')
+    # plt.show()
