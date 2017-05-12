@@ -1,5 +1,7 @@
 """
-This module holds the class necessary to make the Matrix Factorization model
+This module holds the class necessary to make the Matrix Factorization models.
+Also the structure of this code was heavily inspired by:
+https://gist.github.com/EthanRosenthal/a293bfe8bbe40d5d0995
 """
 
 import numpy as np
