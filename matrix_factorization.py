@@ -1,3 +1,7 @@
+"""
+This module holds the class necessary to make the Matrix Factorization model
+"""
+
 import numpy as np
 import operator
 import copy
@@ -6,7 +10,15 @@ import sparse_bag_tools as spt
 
 
 class matrix_factor():
+    """
+    This class is used to build the matrix factors using either Alternating Least Squares or 
+    Stochastic Gradient Descent
+    """
     def __init__(self, k = 2, method = "als"):
+        """
+        Here we iniailize the class with the number of latent factors k and
+        which method to use
+        """
         self.k = k
         self.fitted = False
         if method not in ["sgd", "als"]:
@@ -16,6 +28,13 @@ class matrix_factor():
             
             
     def fit(self, train_bag, steps = 10, beta = 1, alpha = 0.01):
+        """
+        This begains training the data to the method specified before
+        where beta is the regularization term and alpha is the step size for 
+        """
+        
+        # This block of code is used to iniatilize the factor matrices and setup the dictionaries that 
+        # will allow us to jump from the nested dictionary representation to a numpy array
         self.alpha = alpha
         self.item_bag  = spt.sparse_bag_transpose(train_bag)
         self.user_list  = list(train_bag.keys())
@@ -31,7 +50,7 @@ class matrix_factor():
         
         
             
-            
+        # Here we translate the rating matrix from the nested dictionary to a numpy array 
         for user in train_bag.keys():
             u = self.U_index[user]
             for item in train_bag[user].keys():
@@ -44,6 +63,8 @@ class matrix_factor():
         self.mean = np.sum(self.R)/np.sum(self.W)
         self.errs = []
         
+        
+        # Here the steps are implemented
         for step in range(steps):
             
             if self.method == "als":
@@ -61,11 +82,17 @@ class matrix_factor():
     
     
     def predict_point(self, u, i):
+        """
+        This method predicts the rating for a user-item pair
+        """
         prediction = np.dot(self.U[u,:], self.I[:,i])
         return prediction
     
     
     def als_step(self):
+        """
+        This method implements a single als step 
+        """
         inv_for_U = np.linalg.inv(np.dot(self.I, self.I.T) + self.Beta)
         for u in range(len(self.user_list)):
             self.U[u, :] = np.dot(np.dot(self.R[u,:].reshape(1,-1), self.I.T),
@@ -85,6 +112,9 @@ class matrix_factor():
         
         
     def sgd_step(self):
+        """
+        This method implements a single sgd step 
+        """
         for index in self.indices:
             u, i = index
             prediction = self.predict_point(u, i)
@@ -99,6 +129,9 @@ class matrix_factor():
         
     
     def fold_in_user(self, users_list, user_id):
+        """
+        This function folds in a new user into the user latent factor matrix
+        """
         self.U_index[user_id] = len(self.user_list)
         self.user_list.append(user_id)
         ru = np.zeros(len(self.item_list))
@@ -109,6 +142,9 @@ class matrix_factor():
         self.U = np.append(self.U, u, axis = 0)
         
     def predict(self, test_points, query_bag = {}):
+        """
+        This method makes predictions for user-item pairs in test_points 
+        """
         predictions = {}
         for pair in test_points:
             user = pair[0]

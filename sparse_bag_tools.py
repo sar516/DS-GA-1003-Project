@@ -6,6 +6,11 @@ import copy
 import random
 
 def bag_of_games(data_set):
+    """
+    This function serves to load the user's playtime into a nested dictionary format:
+    first level of keys being the user IDs and the values being dictionaries that hold
+    the users games as keys and playtime as the values.
+    """
     user_ids = data_set["user_id"].unique()
     user_bag = {}
     
@@ -19,6 +24,9 @@ def bag_of_games(data_set):
     return user_bag
 
 def preprocessing(bag):
+    """
+    This function removes all users that have only one game 
+    """
     user_count = {user : len(items) for user, items in bag.items()}
     k ={}
     for key, value in user_count.items():
@@ -29,6 +37,11 @@ def preprocessing(bag):
 
 
 def leave_n_in(bag, n=1, p = .25):
+    """
+    This function takes the data set and splits it into a training set making
+    sure that each user has atleast n items and a test set that has p proportion
+    of the data set
+    """
     copy_bag = copy.deepcopy(bag)
     
     N = sum([len(lists) for lists in bag.values()])
@@ -57,6 +70,8 @@ def leave_n_in(bag, n=1, p = .25):
             item_list = list(items.keys())
             rand_2 = int(j*(random.random()))
             item = item_list[rand_2]
+            
+            # We also made sure not to remove any games from the training set
             if item_count[item] > 1:
                 removed[(user, item)] = items.pop(item)
                 j -= 1
@@ -70,6 +85,10 @@ def leave_n_in(bag, n=1, p = .25):
         return copy_bag, removed
 
 def norm(bag, func = None):
+    """
+    This function normalizes the ratings of the bag passed into by the 1 arg
+    function given. It defaults to the log of 1 + 60*ratings
+    """
     copy_bag = copy.deepcopy(bag)
     if not func:
         func = lambda x : np.log10(1 + x*60)
@@ -82,25 +101,42 @@ def norm(bag, func = None):
     
 
 class Baseline():
+    """
+    This is the class used to build the baseline model
+    """
     
     def __init__(self, reg = 25):
         self.reg = reg
         self.fitted = False
         
     def get_bu(self, users_list):
+        """
+        simple method to calculate the baseline estimator of a user
+        based of the equations described in the report 
+        """
         bu = (sum([rating  - self.mu  for rating in users_list.values()])/
               (len(users_list)+self.reg))
         return bu
     
     def get_bi(self, items_list):
+        """
+        simple method to calculate the baseline estimator of an item
+        based of the equations described in the report
+        """
         bi = (sum([rating - self.user_baselines[user] - self.mu
                    for user, rating in items_list.items()])/(len(items_list)+self.reg))
         return bi
     
     
     def fit(self, train_bag):
+        """
+        This is the main method used to train the baseline model
+        """
+        
         self.train_bag = train_bag
         self.item_bag  = sparse_bag_transpose(train_bag)
+        
+        # Calculate the mean, user baselines, and item baselines
         self.mu = (sum([sum(v.values()) for v in self.train_bag.values()])/
                    sum([len(v.keys()) for v in self.train_bag.values()]))
         self.user_baselines = {user : self.get_bu(users_list) 
@@ -114,6 +150,9 @@ class Baseline():
     
     
     def predict(self, test_points):
+        """
+        Makes the predictions for the user items pairs given in test points
+        """
         predictions = {}
         for pair in test_points:
             user, item = pair
@@ -124,6 +163,9 @@ class Baseline():
         return predictions
 
 def get_metrics(actuals, preds):
+    """
+    Calculates the RMSE and MAE between two dictionaries 
+    """
     abs_diff = {}
     square_diff = {}
     for point in preds.keys():
@@ -136,6 +178,9 @@ def get_metrics(actuals, preds):
     return MAE, RMSE
 
 def sparse_bag_transpose(bag):
+    """
+    This function transbose the user-item matrix pass into it to a item-user matrix
+    """
     transpose = {}
     for user, games_list in bag.items():
         for game, rating in games_list.items():
@@ -146,6 +191,12 @@ def sparse_bag_transpose(bag):
     return transpose
 
 def dict_dist(dict1, dict2):
+    """
+    computes the euclidian distantce between two dictionary vectors
+    """
+    
+    # Make sure to only calculate the distance between keys
+    # they in their union
     keys1 = list(dict1.keys())
     keys2 = list(dict2.keys())
     all_keys = list(set(keys1) | set(keys2))
@@ -157,6 +208,10 @@ def dict_dist(dict1, dict2):
 
 
 def knn_dict(neighbors, query, k = 2):
+    """
+    This function finds the k closest dictionary vectors to query
+    in the set of dictionary vectors neighbors
+    """
     keys = list(neighbors.keys())
     dists = np.zeros(len(neighbors))
     knn = {}
@@ -178,6 +233,12 @@ def knn_dict(neighbors, query, k = 2):
     return knn
 
 def dict_dot(dict1, dict2):
+    """
+    This function computes the dot product of dictionary vectors
+    """
+    
+    # Here we find the intersection in the keys to leverage the fact that
+    # if a vector doesn't have key then the value of that key would be zero
     keys1 = list(dict1.keys())
     keys2 = list(dict2.keys())
     cross_keys = list(set(keys1) & set(keys2))
@@ -193,6 +254,9 @@ def dict_dot(dict1, dict2):
     
     
 def cos_sim(dict1, dict2):
+    """
+    This function computes the cosine similarity between two dictionary vectors 
+    """
     try:
         return dict_dot(dict1, dict2)/(dict_dist(dict1,{})*dict_dist(dict2,{}))
     except ZeroDivisionError:
